@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Transactions - Finance Tracker
+{% endblock %}
+
+{% block content %}
+
+<style>
+    /* Styling for popup window with animation */
+    .popup {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+    }
+
+    .popup-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.9);
+        background: #f9f9f9;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        width: 500px;
+        opacity: 0;
+        transition: all 0.3s ease-in-out;
+    }
+
+    .popup.show .popup-content {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    .close {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        cursor: pointer;
+        font-size: 20px;
+        color: #d9534f;
+    }
+
+    /* Table Styling */
+    .table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 20px 0;
+        font-size: 18px;
+    }
+
+    .table thead {
+        background: #343a40;
+        color: white;
+        font-weight: bold;
+    }
+
+    .table tbody tr {
+        background: white;
+        border-bottom: 1px solid #dee2e6;
+        transition: 0.3s ease-in-out;
+    }
+
+    .table tbody tr:hover {
+        background: #f1f1f1;
+        transform: scale(1.02);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .table tbody tr td {
+        padding: 15px 10px;
+    }
+
+    .btn-custom {
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 10px;
+        transition: all 0.3s ease-in-out;
+        margin: 5px;
+    }
+
+    .btn-custom:hover {
+        transform: scale(1.1);
+    }
+</style>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <h2 class="fw-bold text-primary">Transactions</h2>
+    </div>
+    <div class="col-md-6 text-end">
+        <button class="btn btn-primary btn-custom" onclick="openPopup('add')">
+            <i class="fas fa-plus"></i> Add Transaction
+        </button>
+        <button class="btn btn-success btn-custom" onclick="downloadCSV()">
+            <i class="fa-solid fa-file-arrow-down"></i> Download CSV
+        </button>
+        <button class="btn btn-info btn-custom" onclick="window.location.href='{{ url_for('download_pdf') }}'">
+            <i class="fa-solid fa-file-pdf"></i> Download PDF
+        </button>
+    </div>
+</div>
+
+<div class="table-responsive mt-4">
+    <table class="table text-center">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Payment Method</th>
+                <th>Notes</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction[4] }}</td>  {# Date #}
+                <td>{{ transaction[3] }}</td>  {# Category #}
+                <td><span class="text-success fw-bold">₹{{ transaction[2] }}</span></td>  {# Amount #}
+                <td>{{ transaction[6] }}</td>  {# Payment Method #}
+                <td>{{ transaction[5] }}</td>  {# Notes or Description #}
+                <td>
+                    <button class="btn btn-warning btn-custom" onclick="openPopup('edit', {{ transaction[0] }}, '{{ transaction[4] }}', '{{ transaction[3] }}', {{ transaction[2] }}, '{{ transaction[6] }}', '{{ transaction[5] }}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <form action="{{ url_for('delete_transaction', transaction_id=transaction[0]) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-custom" onclick="return confirm('Are you sure you want to delete this transaction?');">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Popup Form -->
+<div id="popup" class="popup">
+    <div class="popup-content">
+        <span class="close" onclick="closePopup()">&times;</span>
+        <h4 class="text-center fw-bold" id="popup-title">Add New Transaction</h4>
+        <form id="popup-form" action="{{ url_for('add_transaction') }}" method="post">
+            <div class="mb-3">
+                <label class="form-label">Date:</label>
+                <input type="date" name="date" id="popup-date" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Category:</label>
+                <select name="category" id="popup-category" class="form-select" required>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Food">Food</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Education">Education</option>
+                    <option value="Travel expenses">Travel expenses</option>
+                    <option value="Gifts">Gifts</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Subscriptions">Subscriptions</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Amount:</label>
+                <input type="number" name="amount" id="popup-amount" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Payment Method:</label>
+                <select name="payment_method" id="popup-payment-method" class="form-select" required>
+                    <option value="UPI">UPI</option>
+                    <option value="Cash">Cash</option>
+                    <option value="cards">Cards</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Notes:</label>
+                <textarea name="notes" id="popup-notes" class="form-control"></textarea>
+            </div>
+            <input type="hidden" name="transaction_id" id="popup-transaction-id">
+            <button type="submit" class="btn btn-primary btn-custom w-100" id="popup-submit-button">Add Transaction</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Open and close popup with smooth animation
+    function openPopup(mode, id = '', date = '', category = '', amount = '', payment_method = '', notes = '') {
+        const popup = document.getElementById("popup");
+        const title = document.getElementById("popup-title");
+        const form = document.getElementById("popup-form");
+        const submitButton = document.getElementById("popup-submit-button");
+
+        if (mode === 'edit') {
+            title.textContent = "Edit Transaction";
+            form.action = `{{ url_for('edit_transaction') }}`;
+            submitButton.textContent = "Save Changes";
+
+            document.getElementById("popup-date").value = date;
+            document.getElementById("popup-category").value = category;
+            document.getElementById("popup-amount").value = amount;
+            document.getElementById("popup-payment-method").value = payment_method;
+            document.getElementById("popup-notes").value = notes;
+            document.getElementById("popup-transaction-id").value = id;
+        } else {
+            title.textContent = "Add New Transaction";
+            form.action = `{{ url_for('add_transaction') }}`;
+            submitButton.textContent = "Add Transaction";
+
+            document.getElementById("popup-date").value = '';
+            document.getElementById("popup-category").value = '';
+            document.getElementById("popup-amount").value = '';
+            document.getElementById("popup-payment-method").value = '';
+            document.getElementById("popup-notes").value = '';
+            document.getElementById("popup-transaction-id").value = '';
+        }
+
+        popup.classList.add("show");
+        popup.style.display = "block";
+    }
+
+    function closePopup() {
+        const popup = document.getElementById("popup");
+        popup.classList.remove("show");
+        setTimeout(() => {
+            popup.style.display = "none";
+        }, 300);
+    }
+
+    // Function to download transactions as CSV
+    function downloadCSV() {
+        const rows = document.querySelectorAll('table tbody tr');
+        let csvContent = 'Date,Category,Amount,Payment Method,Notes\n';
+    
+        rows.forEach(row => {
+            const columns = row.querySelectorAll('td');
+            let rowData = Array.from(columns).map(column => `"${column.textContent.trim().replace('₹', '')}"`);
+            csvContent += rowData.join(',') + '\n';
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+</script>
+
+{% endblock %}

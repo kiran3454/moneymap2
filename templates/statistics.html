@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Enhanced Statistics - Finance Tracker
+{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background-color: #f0f2f5;
+        font-family: 'Arial', sans-serif;
+    }
+
+    .card {
+        border-radius: 15px;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    .card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-header, .card-footer {
+        background-color: #343a40;
+        color: white;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .icon {
+        font-size: 28px;
+        margin-right: 8px;
+    }
+
+    .list-group-item {
+        font-size: 18px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        border: none;
+        padding: 1rem 1.5rem;
+        transition: background-color 0.2s;
+    }
+
+    .list-group-item:hover {
+        background-color: #e2e6ea;
+    }
+
+    .table th, .table td {
+        padding: 1.5rem;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .table th {
+        background-color: #495057;
+        color: white;
+    }
+
+    .table td {
+        font-weight: bold;
+    }
+
+    .text-success {
+        color: #28a745;
+    }
+
+    .text-danger {
+        color: #dc3545;
+    }
+
+    /* Additional styles to control chart size */
+    .chart-container {
+        position: relative;
+        max-width: 600px;
+        margin: auto;
+        display: none;  /* Hide charts by default */
+    }
+
+    #expensePieChart,
+    #topSpendingBarChart,
+    #monthlyExpensesLineChart,
+    #incomeVsExpensesRadarChart,
+    #topSpendingCategoriesDoughnutChart {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .btn-chart {
+        display: block;
+        width: 100%;
+        text-align: center;
+        padding: 0.5rem 0;
+        margin-bottom: 1rem;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .btn-chart:hover {
+        background-color: #0056b3;
+    }
+</style>
+
+<div class="container mt-4">
+    <!-- Total Expenses Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-wallet icon"></i> Total Expenses
+        </div>
+        <div class="card-body text-center">
+            <h3 class="fw-bold text-danger">₹{{ total_expenses }}</h3>
+        </div>
+    </div>
+
+    <!-- Expense Breakdown by Category -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-chart-pie icon"></i> Expense Breakdown by Category
+        </div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category, amount in expense_by_category.items() %}
+                    <tr>
+                        <td>{{ category }}</td>
+                        <td>₹{{ amount }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">
+            Stay on top of your finances!
+        </div>
+    </div>
+
+    <!-- Top Spending Categories -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-list icon"></i> Top Spending Categories
+        </div>
+        <div class="card-body">
+            <ul class="list-group">
+                {% for category, amount in top_spending_categories.items() %}
+                <li class="list-group-item">
+                    <span>{{ category }}</span>
+                    <span class="text-danger">₹{{ amount }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Buttons to Toggle Charts -->
+    <button class="btn-chart" onclick="toggleChart('expenseBarChartContainer')">Toggle Expense Bar Chart</button>
+    <button class="btn-chart" onclick="toggleChart('topSpendingCategoriesDoughnutChartContainer')">Toggle Top Spending Doughnut Chart</button>
+
+    <!-- Expense Bar Chart -->
+    <div id="expenseBarChartContainer" class="card mb-4 chart-container">
+        <div class="card-header">
+            <i class="fas fa-chart-bar icon"></i> Bar Chart Representation
+        </div>
+        <div class="card-body">
+            <canvas id="expenseBarChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Top Spending Doughnut Chart -->
+    <div id="topSpendingCategoriesDoughnutChartContainer" class="card mb-4 chart-container">
+        <div class="card-header">
+            <i class="fas fa-chart-doughnut icon"></i> Doughnut Chart Representation
+        </div>
+        <div class="card-body">
+            <canvas id="topSpendingCategoriesDoughnutChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Function to toggle the chart container
+        window.toggleChart = function(chartId) {
+            var container = document.getElementById(chartId);
+            if (container) {
+                container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
+            }
+        };
+
+        // Bar Chart for Expense Breakdown by Category
+        var ctxBar = document.getElementById('expenseBarChart').getContext('2d');
+        var expenseByCategory = {{ expense_by_category|tojson }};
+        
+        var barData = {
+            labels: Object.keys(expenseByCategory),
+            datasets: [{
+                label: 'Amount (₹)',
+                data: Object.values(expenseByCategory),
+                backgroundColor: '#36A2EB',
+                borderColor: '#1f78b4',
+                borderWidth: 1
+            }]
+        };
+        
+        new Chart(ctxBar, {
+            type: 'bar',
+            data: barData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false,
+                    },
+                    title: {
+                        display: true,
+                        text: 'Expense Breakdown by Category'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(tooltipItem) {
+                                var total = tooltipItem.dataset.data.reduce((acc, val) => acc + val, 0);
+                                var currentValue = tooltipItem.raw;
+                                var percentage = ((currentValue / total) * 100).toFixed(2);
+                                return '₹' + currentValue + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Doughnut Chart for Top Spending Categories
+        var ctxDoughnut = document.getElementById('topSpendingCategoriesDoughnutChart').getContext('2d');
+        var topSpendingCategories = {{ top_spending_categories|tojson }};
+        
+        var doughnutData = {
+            labels: Object.keys(topSpendingCategories),
+            datasets: [{
+                data: Object.values(topSpendingCategories),
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40'
+                ],
+                hoverBackgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40'
+                ]
+            }]
+        };
+
+        new Chart(ctxDoughnut, {
+            type: 'doughnut',
+            data: doughnutData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Top Spending Categories Doughnut Chart'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(tooltipItem) {
+                                var total = tooltipItem.dataset.data.reduce((acc, val) => acc + val, 0);
+                                var currentValue = tooltipItem.raw;
+                                var percentage = ((currentValue / total) * 100).toFixed(2);
+                                return '₹' + currentValue + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                },
+                animation: {
+                    animateScale: true,
+                    animateRotate: true
+                }
+            }
+        });
+    });
+</script>
+
+{% endblock %}
